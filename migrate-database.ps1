@@ -1,0 +1,1 @@
+dotnet run --project UTM.eCommerce --migrate-database
