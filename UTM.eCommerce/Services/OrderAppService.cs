@@ -1,16 +1,17 @@
 ﻿using UTM.eCommerce.Entities;
 using UTM.eCommerce.Repositories;
+using UTM.eCommerce.Services.Dtos;
 using Volo.Abp.Application.Services;
 
 namespace UTM.eCommerce.Services
 {
-    public class CrudAppService : ApplicationService, ICrudAppService
+    public class OrderAppService : ApplicationService
     {
         private readonly IProductRepository _productRepository;
         private readonly IOrderRepository _orderRepository;
         private readonly ICustomerRepository _customerRepository;
 
-        public CrudAppService(
+        public OrderAppService(
             IProductRepository productRepository,
             IOrderRepository orderRepository,
             ICustomerRepository customerRepository)
@@ -20,18 +21,10 @@ namespace UTM.eCommerce.Services
             _customerRepository = customerRepository;
         }
 
-        public async Task<Guid> CreateProductAsync(string name, decimal price, int stockCount)
+        public async Task<OrderDto> GetOrderAsync(Guid id)
         {
-            var product = new Product
-            {
-                Name = name,
-                Price = price,
-                StockCount = stockCount
-            };
-
-            await _productRepository.InsertAsync(product, autoSave: true);
-
-            return product.Id;
+            var order = await _orderRepository.GetAsync(id);
+            return ObjectMapper.Map<Order, OrderDto>(order);
         }
 
         public async Task<Guid> PlaceOrderAsync(string customerFirstName, string customerLastName, string customerEmail, Guid productId, int quantity)
@@ -39,7 +32,6 @@ namespace UTM.eCommerce.Services
             var customer = await GetOrCreateCustomerAsync(customerFirstName, customerLastName, customerEmail);
 
             var product = await _productRepository.GetAsync(productId);
-
             if (product == null)
             {
                 throw new ApplicationException("Product not found.");
@@ -54,37 +46,36 @@ namespace UTM.eCommerce.Services
             {
                 OrderDate = DateTime.UtcNow,
                 TotalAmount = product.Price * quantity,
-                Customer = customer
+                CustomerId = customer.Id
             };
 
             product.StockCount -= quantity;
             product.Orders.Add(order);
 
-            await _productRepository.UpdateAsync(product, autoSave: true);
-            await _orderRepository.InsertAsync(order, autoSave: true);
+            await _productRepository.UpdateAsync(product);
+            await _orderRepository.InsertAsync(order);
 
             return order.Id;
         }
 
         private async Task<Customer> GetOrCreateCustomerAsync(string firstName, string lastName, string email)
         {
-            var existingCustomer = await _customerRepository.FindByEmailAsync(email);
-
-            if (existingCustomer != null)
+            var customer = await _customerRepository.FindByEmailAsync(email);
+            if (customer != null)
             {
-                return existingCustomer;
+                return customer;
             }
 
-            var newCustomer = new Customer
+            customer = new Customer
             {
                 FirstName = firstName,
                 LastName = lastName,
                 Email = email
             };
 
-            await _customerRepository.InsertAsync(newCustomer, autoSave: true);
+            await _customerRepository.InsertAsync(customer);
 
-            return newCustomer;
+            return customer;
         }
     }
 
