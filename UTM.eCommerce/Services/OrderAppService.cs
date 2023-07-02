@@ -44,26 +44,7 @@ namespace UTM.eCommerce.Services
             return ObjectMapper.Map<Order, OrderDto>(order);
         }
 
-        private async Task<Customer> GetOrCreateCustomer(string firstName, string lastName, string email)
-        {
-            var customers  = await _customerRepository.GetListAsync();
-
-            if (customers.Count == 0)
-            {
-                throw new ApplicationException("No customers found.");
-            }
-
-            var customer = customers.FirstOrDefault(c => c.FirstName == firstName && c.LastName == lastName);
-
-            if (customer == null)
-            {
-                customer = await CreateCustomerAsync(firstName, lastName, email);
-            }
-
-            return customer;
-        }
-
-        private async Task<Customer> CreateCustomerAsync(string firstName, string lastName, string email)
+        public async Task CreateCustomerAsync(string firstName, string lastName, string email)
         {
             var newCustomer = new Customer
             {
@@ -72,7 +53,6 @@ namespace UTM.eCommerce.Services
                 Email = email
             };
             await _customerRepository.InsertAsync(newCustomer);
-            return newCustomer;
         }
 
         public async void PlaceOrder(PlaceOrderDto input)
