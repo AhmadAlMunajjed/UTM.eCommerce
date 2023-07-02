@@ -1,4 +1,5 @@
-﻿using UTM.eCommerce.Entities;
+﻿using System.Diagnostics;
+using UTM.eCommerce.Entities;
 using UTM.eCommerce.Repositories;
 using UTM.eCommerce.Services.Dtos;
 using Volo.Abp.Application.Services;
@@ -8,9 +9,9 @@ namespace UTM.eCommerce.Services
 {
     public class ProductAppService : ApplicationService
     {
-        private readonly IProductRepository _productRepository;
+        private readonly IRepository<Product, Guid> _productRepository;
 
-        public ProductAppService(IProductRepository productRepository)
+        public ProductAppService(IRepository<Product, Guid> productRepository)
         {
             _productRepository = productRepository;
         }
@@ -21,8 +22,11 @@ namespace UTM.eCommerce.Services
             return ObjectMapper.Map<Product, ProductDto>(product);
         }
 
-        public async void CreateProduct(string name, int price, int stock)
+        public async Task<Guid> CreateProduct(string name, int price, int stock)
         {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
             if (await ProductExists(name))
             {
                 throw new ApplicationException("Product with the same name already exists.");
@@ -35,7 +39,12 @@ namespace UTM.eCommerce.Services
                 StockCount = stock
             };
 
-            await _productRepository.InsertAsync(product);
+            var created = await _productRepository.InsertAsync(product);
+            
+            stopwatch.Stop();
+            Console.WriteLine("Elapsed Time is {0} ms", stopwatch.ElapsedMilliseconds);
+
+            return created.Id;
         }
 
         public async Task<bool> ProductExists(string name)

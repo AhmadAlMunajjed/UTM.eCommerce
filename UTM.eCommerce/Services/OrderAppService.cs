@@ -1,4 +1,5 @@
-﻿using UTM.eCommerce.Entities;
+﻿using System.Diagnostics;
+using UTM.eCommerce.Entities;
 using UTM.eCommerce.Repositories;
 using UTM.eCommerce.Services.Dtos;
 using Volo.Abp.Application.Services;
@@ -8,30 +9,14 @@ namespace UTM.eCommerce.Services
 {
     public class OrderAppService : ApplicationService
     {
-        private readonly IProductRepository _productRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly ICustomerRepository _customerRepository;
-        public class CreateProductDto
-        {
-            public string Name { get; set; }
-            public decimal Price { get; set; }
-            public int StockCount { get; set; }
-            public string CustomerFirstName { get; set; }
-            public string CustomerLastName { get; set; }
-            public string CustomerEmail { get; set; }
-        }
-
-        public class PlaceOrderDto
-        {
-            public Guid CustomerId { get; set; }
-            public Guid ProductId { get; set; }
-            public int Quantity { get; set; }
-        }
-
+        private readonly IRepository<Product, Guid> _productRepository;
+        private readonly IRepository<Order, Guid> _orderRepository;
+        private readonly IRepository<Customer, Guid> _customerRepository;
+        
         public OrderAppService(
-            IProductRepository productRepository,
-            IOrderRepository orderRepository,
-            ICustomerRepository customerRepository)
+            IRepository<Product, Guid> productRepository,
+            IRepository<Order, Guid> orderRepository,
+            IRepository<Customer, Guid> customerRepository)
         {
             _productRepository = productRepository;
             _orderRepository = orderRepository;
@@ -44,7 +29,7 @@ namespace UTM.eCommerce.Services
             return ObjectMapper.Map<Order, OrderDto>(order);
         }
 
-        public async Task CreateCustomerAsync(string firstName, string lastName, string email)
+        public async Task<Guid> CreateCustomerAsync(string firstName, string lastName, string email)
         {
             var newCustomer = new Customer
             {
@@ -52,11 +37,16 @@ namespace UTM.eCommerce.Services
                 LastName = lastName,
                 Email = email
             };
-            await _customerRepository.InsertAsync(newCustomer);
+
+            var created = await _customerRepository.InsertAsync(newCustomer);
+            return created.Id;
         }
 
         public async void PlaceOrder(PlaceOrderDto input)
         {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
             var product = await _productRepository.FirstOrDefaultAsync(p => p.Id == input.ProductId);
             if (product == null)
             {
@@ -82,7 +72,27 @@ namespace UTM.eCommerce.Services
 
             await _productRepository.UpdateAsync(product);
             await _orderRepository.InsertAsync(order);
+
+            stopwatch.Stop();
+            Console.WriteLine("Elapsed Time is {0} ms", stopwatch.ElapsedMilliseconds);
         }
     }
 
+}
+
+public class CreateProductDto
+{
+    public string Name { get; set; }
+    public decimal Price { get; set; }
+    public int StockCount { get; set; }
+    public string CustomerFirstName { get; set; }
+    public string CustomerLastName { get; set; }
+    public string CustomerEmail { get; set; }
+}
+
+public class PlaceOrderDto
+{
+    public Guid CustomerId { get; set; }
+    public Guid ProductId { get; set; }
+    public int Quantity { get; set; }
 }
