@@ -2,6 +2,7 @@
 using UTM.eCommerce.Repositories;
 using UTM.eCommerce.Services.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace UTM.eCommerce.Services
 {
@@ -10,6 +11,22 @@ namespace UTM.eCommerce.Services
         private readonly IProductRepository _productRepository;
         private readonly IOrderRepository _orderRepository;
         private readonly ICustomerRepository _customerRepository;
+        public class CreateProductDto
+        {
+            public string Name { get; set; }
+            public decimal Price { get; set; }
+            public int StockCount { get; set; }
+            public string CustomerFirstName { get; set; }
+            public string CustomerLastName { get; set; }
+            public string CustomerEmail { get; set; }
+        }
+
+        public class PlaceOrderDto
+        {
+            public Guid CustomerId { get; set; }
+            public Guid ProductId { get; set; }
+            public int Quantity { get; set; }
+        }
 
         public OrderAppService(
             IProductRepository productRepository,
@@ -27,55 +44,64 @@ namespace UTM.eCommerce.Services
             return ObjectMapper.Map<Order, OrderDto>(order);
         }
 
-        public async Task<Guid> PlaceOrderAsync(string customerFirstName, string customerLastName, string customerEmail, Guid productId, int quantity)
+        private async Task<Customer> GetOrCreateCustomer(string firstName, string lastName, string email)
         {
-            var customer = await GetOrCreateCustomerAsync(customerFirstName, customerLastName, customerEmail);
+            var customers  = await _customerRepository.GetListAsync();
 
-            var product = await _productRepository.GetAsync(productId);
-            if (product == null)
+            if (customers.Count == 0)
             {
-                throw new ApplicationException("Product not found.");
+                throw new ApplicationException("No customers found.");
             }
 
-            if (product.StockCount < quantity)
+            var customer = customers.FirstOrDefault(c => c.FirstName == firstName && c.LastName == lastName);
+
+            if (customer == null)
             {
-                throw new ApplicationException("Insufficient stock.");
+                customer = await CreateCustomerAsync(firstName, lastName, email);
             }
 
-            var order = new Order
-            {
-                OrderDate = DateTime.UtcNow,
-                TotalAmount = product.Price * quantity,
-                CustomerId = customer.Id
-            };
-
-            product.StockCount -= quantity;
-            product.Orders.Add(order);
-
-            await _productRepository.UpdateAsync(product);
-            await _orderRepository.InsertAsync(order);
-
-            return order.Id;
+            return customer;
         }
 
-        private async Task<Customer> GetOrCreateCustomerAsync(string firstName, string lastName, string email)
+        private async Task<Customer> CreateCustomerAsync(string firstName, string lastName, string email)
         {
-            var customer = await _customerRepository.FindByEmailAsync(email);
-            if (customer != null)
-            {
-                return customer;
-            }
-
-            customer = new Customer
+            var newCustomer = new Customer
             {
                 FirstName = firstName,
                 LastName = lastName,
                 Email = email
             };
+            await _customerRepository.InsertAsync(newCustomer);
+            return newCustomer;
+        }
 
-            await _customerRepository.InsertAsync(customer);
+        public async void PlaceOrder(PlaceOrderDto input)
+        {
+            var product = await _productRepository.FirstOrDefaultAsync(p => p.Id == input.ProductId);
+            if (product == null)
+            {
+                throw new ApplicationException("Product not found.");
+            }
 
-            return customer;
+            var customer = await _customerRepository.FirstOrDefaultAsync(c => c.Id == input.CustomerId);
+            if (customer == null)
+            {
+                throw new ApplicationException("Customer not found.");
+            }
+
+            var order = new Order
+            {
+                OrderDate = DateTime.UtcNow,
+                TotalAmount = product.Price * input.Quantity,
+                Customer = customer
+            };
+
+            product.StockCount -= input.Quantity;
+
+            customer.Orders.Add(order);
+
+            await _productRepository.UpdateAsync(product);
+            await _orderRepository.InsertAsync(order);
         }
     }
 

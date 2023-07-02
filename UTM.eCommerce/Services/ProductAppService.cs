@@ -2,6 +2,7 @@
 using UTM.eCommerce.Repositories;
 using UTM.eCommerce.Services.Dtos;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace UTM.eCommerce.Services
 {
@@ -20,11 +21,9 @@ namespace UTM.eCommerce.Services
             return ObjectMapper.Map<Product, ProductDto>(product);
         }
 
-
-        public async Task<Guid> CreateProductAsync(string name, decimal price, int stockCount)
+        public async void CreateProduct(string name, int price, int stock)
         {
-            var existingProduct = await _productRepository.FindByNameAsync(name);
-            if (existingProduct != null)
+            if (await ProductExists(name))
             {
                 throw new ApplicationException("Product with the same name already exists.");
             }
@@ -33,12 +32,16 @@ namespace UTM.eCommerce.Services
             {
                 Name = name,
                 Price = price,
-                StockCount = stockCount
+                StockCount = stock
             };
 
             await _productRepository.InsertAsync(product);
+        }
 
-            return product.Id;
+        public async Task<bool> ProductExists(string name)
+        {
+            var existingProduct = await _productRepository.FirstOrDefaultAsync(p => p.Name == name);
+            return existingProduct != null;
         }
     }
 
