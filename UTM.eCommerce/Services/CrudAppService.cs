@@ -1,91 +1,97 @@
 ﻿using UTM.eCommerce.Entities;
 using UTM.eCommerce.Repositories;
 using Volo.Abp.Application.Services;
+using Volo.Abp.Domain.Repositories;
 
 namespace UTM.eCommerce.Services
 {
-    public class CrudAppService : ApplicationService, ICrudAppService
+    public class CrudAppService : ApplicationService
     {
-        private readonly IProductRepository _productRepository;
-        private readonly IOrderRepository _orderRepository;
-        private readonly ICustomerRepository _customerRepository;
+        private readonly IRepository<Product, Guid> _productRepository;
+        private readonly IRepository<Order, Guid> _orderRepository;
+        private readonly IRepository<Customer, Guid> _customerRepository;
 
         public CrudAppService(
-            IProductRepository productRepository,
-            IOrderRepository orderRepository,
-            ICustomerRepository customerRepository)
+            IRepository<Product, Guid> productRepository,
+            IRepository<Order, Guid> orderRepository,
+            IRepository<Customer, Guid> customerRepository)
         {
             _productRepository = productRepository;
             _orderRepository = orderRepository;
             _customerRepository = customerRepository;
         }
 
-        public async Task<Guid> CreateProductAsync(string name, decimal price, int stockCount)
+        public async void CreateProduct(string name, decimal price, int stockCount)
         {
+            // Code Smell: Duplicated Code
+            var existingProduct = await _productRepository.FirstOrDefaultAsync(p => p.Name == name);
+            if (existingProduct != null)
+            {
+                throw new ApplicationException("Product with the same name already exists.");
+            }
+
             var product = new Product
             {
                 Name = name,
                 Price = price,
                 StockCount = stockCount
             };
+            await _productRepository.InsertAsync(product);
 
-            await _productRepository.InsertAsync(product, autoSave: true);
+            var customer = await GetOrCreateCustomerAsync();
 
-            return product.Id;
+            await CreateOrder(product, customer);
         }
 
-        public async Task<Guid> PlaceOrderAsync(string customerFirstName, string customerLastName, string customerEmail, Guid productId, int quantity)
+        public async Task<bool> CheckIfProductExists(string name)
         {
-            var customer = await GetOrCreateCustomerAsync(customerFirstName, customerLastName, customerEmail);
+            // Code Smell: Duplicated Code
+            var existingProduct = await _productRepository.FirstOrDefaultAsync(p => p.Name == name);
+            return existingProduct != null;
+        }
 
-            var product = await _productRepository.GetAsync(productId);
-
-            if (product == null)
+        private async Task<Customer> GetOrCreateCustomerAsync()
+        {
+            // Design Smell: Lack of Abstraction
+            var customers = await _customerRepository.GetListAsync();
+            if (customers.Count == 0)
             {
-                throw new ApplicationException("Product not found.");
+                throw new ApplicationException("No customers found.");
             }
 
-            if (product.StockCount < quantity)
+            var customer = customers.FirstOrDefault(c => c.FirstName == "John" && c.LastName == "Doe");
+
+            if (customer == null)
             {
-                throw new ApplicationException("Insufficient stock.");
+                customer = new Customer
+                {
+                    FirstName = "John",
+                    LastName = "Doe",
+                    Email = "johndoe@example.com"
+                };
+                await _customerRepository.InsertAsync(customer);
             }
 
+            return customer;
+        }
+
+        private async Task CreateOrder(Product product, Customer customer)
+        {
             var order = new Order
             {
                 OrderDate = DateTime.UtcNow,
-                TotalAmount = product.Price * quantity,
+                TotalAmount = product.Price,
                 Customer = customer
             };
 
-            product.StockCount -= quantity;
-            product.Orders.Add(order);
+            // Design Smell: Shotgun Surgery
+            product.StockCount--;
+            customer.Orders.Add(order);
 
-            await _productRepository.UpdateAsync(product, autoSave: true);
-            await _orderRepository.InsertAsync(order, autoSave: true);
-
-            return order.Id;
+            await _productRepository.UpdateAsync(product);
+            await _orderRepository.InsertAsync(order);
         }
 
-        private async Task<Customer> GetOrCreateCustomerAsync(string firstName, string lastName, string email)
-        {
-            var existingCustomer = await _customerRepository.FindByEmailAsync(email);
 
-            if (existingCustomer != null)
-            {
-                return existingCustomer;
-            }
-
-            var newCustomer = new Customer
-            {
-                FirstName = firstName,
-                LastName = lastName,
-                Email = email
-            };
-
-            await _customerRepository.InsertAsync(newCustomer, autoSave: true);
-
-            return newCustomer;
-        }
     }
-
 }
