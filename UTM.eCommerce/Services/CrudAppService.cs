@@ -1,4 +1,5 @@
-﻿using UTM.eCommerce.Entities;
+﻿using System.Diagnostics;
+using UTM.eCommerce.Entities;
 using UTM.eCommerce.Repositories;
 using Volo.Abp.Application.Services;
 using Volo.Abp.Domain.Repositories;
@@ -23,6 +24,9 @@ namespace UTM.eCommerce.Services
 
         public async void CreateProduct(string name, decimal price, int stockCount)
         {
+            Stopwatch stopwatch = new Stopwatch();
+            stopwatch.Start();
+
             // Code Smell: Duplicated Code
             var existingProduct = await _productRepository.FirstOrDefaultAsync(p => p.Name == name);
             if (existingProduct != null)
@@ -41,6 +45,9 @@ namespace UTM.eCommerce.Services
             var customer = await GetOrCreateCustomerAsync();
 
             await CreateOrder(product, customer);
+
+            stopwatch.Stop();
+            Console.WriteLine("Elapsed Time is {0} ms", stopwatch.ElapsedMilliseconds);
         }
 
         public async Task<bool> CheckIfProductExists(string name)
@@ -83,12 +90,8 @@ namespace UTM.eCommerce.Services
                 TotalAmount = product.Price,
                 Customer = customer
             };
-
-            // Design Smell: Shotgun Surgery
-            product.StockCount--;
             customer.Orders.Add(order);
 
-            await _productRepository.UpdateAsync(product);
             await _orderRepository.InsertAsync(order);
         }
 

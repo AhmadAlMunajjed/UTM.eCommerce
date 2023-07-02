@@ -48,6 +48,7 @@ using Volo.Abp.UI.Navigation;
 using Volo.Abp.UI.Navigation.Urls;
 using Volo.Abp.Validation.Localization;
 using Volo.Abp.VirtualFileSystem;
+using Swashbuckle.AspNetCore.SwaggerUI;
 
 namespace UTM.eCommerce;
 
@@ -339,6 +340,8 @@ public class eCommerceModule : AbpModule
         app.UseAbpSwaggerUI(options =>
         {
             options.SwaggerEndpoint("/swagger/v1/swagger.json", "eCommerce API");
+            options.DisplayRequestDuration();
+            options.DocExpansion(DocExpansion.None);
         });
 
         app.UseAuditing();
